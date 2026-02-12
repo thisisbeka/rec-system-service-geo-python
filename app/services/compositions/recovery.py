@@ -17,7 +17,6 @@ from .builder import build_composition_for_task, normalize_composition
 from .helpers import add_task_link, normalize_dataset_id
 from .repository import create_compositions, create_users
 from .repository import create_table_compositions
-from .table_compositions import extract_table_compositions_from_service_compositions
 
 
 def _fingerprint_value(value: Any) -> str:
@@ -65,6 +64,142 @@ def _extract_dataset_ids_from_value(value: Any) -> List[Any]:
             out.extend(_extract_dataset_ids_from_value(item))
 
     return out
+
+
+def _build_table_compositions_from_calls(
+    serializable_compositions: List[Dict[str, Any]],
+    dataset_links: Dict[int, List[str]],
+    dataset_outputs: Dict[int, List[str]],
+    call_edges: Dict,
+    calls_list: list,
+    call_id_to_index: Dict[int, int],
+) -> List[Dict[str, Any]]:
+    """
+    Build TableCompositions directly from recovery data structures.
+    No intermediate extraction step — uses dataset_links, call_edges directly from Calls.
+
+    Each TableComposition stores:
+    - table_ids: which tables participate
+    - service_mids: which services are in the chain
+    - call_ids: traceability
+    - join_steps: where a service consumes both a table and upstream output
+    - nodes, links: full DAG for audit
+    """
+    from datetime import datetime
+
+    table_compositions: List[Dict[str, Any]] = []
+
+    for comp in serializable_compositions:
+        comp_id = comp.get("id")
+        nodes = comp.get("nodes") or []
+        links = comp.get("links") or []
+
+        # Separate table nodes vs call nodes
+        table_ids: List[int] = []
+        call_ids: List[int] = []
+        service_mids: List[int] = []
+        call_id_to_mid: Dict[int, int] = {}
+        owner = None
+        times: List[datetime] = []
+
+        for node in nodes:
+            mid = node.get("mid")
+            nid = node.get("id")
+
+            if mid is None:
+                # Table/dataset node
+                try:
+                    table_ids.append(int(str(nid)))
+                except Exception:
+                    pass
+            else:
+                try:
+                    cid = int(str(nid))
+                    mid_int = int(str(mid))
+                    call_ids.append(cid)
+                    service_mids.append(mid_int)
+                    call_id_to_mid[cid] = mid_int
+                    if not owner and node.get("owner"):
+                        owner = node["owner"]
+                    st = node.get("start_time")
+                    if st:
+                        try:
+                            times.append(datetime.fromisoformat(st))
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+        # Deduplicate preserving order
+        seen = set()
+        table_ids = [x for x in table_ids if not (x in seen or seen.add(x))]
+        seen.clear()
+        call_ids = [x for x in call_ids if not (x in seen or seen.add(x))]
+        seen.clear()
+        service_mids = [x for x in service_mids if not (x in seen or seen.add(x))]
+
+        start_time = min(times) if times else None
+        end_time = max(times) if times else None
+        table_ids_set = set(table_ids)
+
+        # Build join_steps directly from links
+        links_by_target: Dict[str, List[Dict]] = {}
+        for link in links:
+            tgt = str(link.get("target", ""))
+            links_by_target.setdefault(tgt, []).append(link)
+
+        join_steps: List[Dict[str, Any]] = []
+        for cid in call_ids:
+            incoming = links_by_target.get(str(cid), [])
+            table_inputs = []
+            upstream_calls = []
+
+            for link in incoming:
+                src = link.get("source")
+                if src is None:
+                    continue
+                try:
+                    src_int = int(str(src))
+                except Exception:
+                    continue
+
+                if src_int in table_ids_set:
+                    table_inputs.append({"table_id": src_int, "fields": link.get("fields")})
+                elif src_int in call_id_to_mid:
+                    upstream_calls.append({
+                        "source_call_id": src_int,
+                        "source_service_mid": call_id_to_mid.get(src_int),
+                        "fields": link.get("fields"),
+                    })
+
+            if not table_inputs:
+                continue
+
+            join_steps.append({
+                "target_call_id": cid,
+                "target_service_mid": call_id_to_mid.get(cid),
+                "table_inputs": table_inputs,
+                "upstream_calls": upstream_calls,
+                "is_join": bool(upstream_calls),
+            })
+
+        if not comp_id:
+            continue
+
+        table_compositions.append({
+            "id": comp_id,
+            "owner": owner,
+            "start_time": start_time,
+            "end_time": end_time,
+            "table_ids": table_ids,
+            "call_ids": call_ids,
+            "service_mids": service_mids,
+            "join_steps": join_steps,
+            "nodes": nodes,
+            "links": links,
+        })
+
+    return table_compositions
 
 
 def _is_successful_with_wms(task: Call, result_data: Dict) -> bool:
@@ -613,8 +748,10 @@ async def recover_new(db: AsyncSession) -> Dict[str, Any]:
         # Persist recovered compositions into DB for API access (/compositions/)
         await create_compositions(db, serializable_compositions)
 
-        # Extract and persist table compositions into separate table for table-centric analytics/recommendations
-        table_compositions = extract_table_compositions_from_service_compositions(serializable_compositions)
+        # Build TableCompositions directly from recovery data (no intermediate extraction)
+        table_compositions = _build_table_compositions_from_calls(
+            serializable_compositions, dataset_links, dataset_outputs, call_edges, calls_list, call_id_to_index
+        )
         await create_table_compositions(db, table_compositions)
         
         print(f"Created {len(final_compositions)} final compositions")

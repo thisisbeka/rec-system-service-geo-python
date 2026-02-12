@@ -13,8 +13,6 @@ from .repository import (
     create_table_compositions,
     fetch_all_table_compositions,
 )
-from .table_compositions import extract_table_compositions_from_service_compositions
-
 __all__ = [
     'build_composition_for_task',
     'normalize_composition',
@@ -31,6 +29,5 @@ __all__ = [
     'get_composition_stats',
     'create_table_compositions',
     'fetch_all_table_compositions',
-    'extract_table_compositions_from_service_compositions',
 ]
 

@@ -35,12 +35,13 @@ async def predict_next(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Predict how to continue a table sequence.
+    Predict the next table in a workflow sequence.
 
-    Given a sequence of table IDs (e.g. [table_1, table_2]),
-    recommend the next service and/or next table to add to the workflow.
+    Uses the DAGNN (graph neural network) model trained on compositionsDAG.json.
+    The model must be trained first via POST /sequential/train.
 
-    Learned from TableCompositions extracted by /compositions/recoverNew.
+    Input: table_sequence — array of table IDs already in the workflow.
+    Output: predictions ranked by DAGNN score + confidence.
 
     Example:
     ```json
@@ -49,11 +50,6 @@ async def predict_next(
         "n": 5
     }
     ```
-
-    Returns predictions ranked by frequency:
-    - next_service_mid: which service to call next
-    - next_table_id: which table to add next
-    - score: how many real compositions support this prediction
     """
     return await table_compositions_service.predict_next(
         db=db,

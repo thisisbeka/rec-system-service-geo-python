@@ -414,7 +414,7 @@ class SequentialDAGNNAlgorithm(RecommendationAlgorithm):
 
         for composition in data:
             for node in composition["nodes"]:
-                if "mid" in node:
+                if node.get("mid") is not None:
                     id_to_mid[str(node["id"])] = f"service_{node['mid']}"
                 else:
                     id_to_mid[str(node["id"])] = f"table_{node['id']}"
