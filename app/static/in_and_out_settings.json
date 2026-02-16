@@ -1,13 +1,12 @@
 {
     "399": {
         "input": {
-            "tables": "theme_select",
-            "new_table": "theme_select",
+            "tables": "edit",
             "map": "edit",
             "new_layer_wms_link": "edit"
         },
         "output": {
-            "tables": "file",
+            "tables": "edit",
             "map": "edit"
         }
     },

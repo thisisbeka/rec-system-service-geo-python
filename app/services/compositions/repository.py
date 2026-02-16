@@ -93,15 +93,9 @@ async def create_table_compositions(db: AsyncSession, table_compositions: List[D
             if not existing:
                 comp = TableComposition(
                     id=comp_data["id"],
-                    owner=comp_data.get("owner"),
-                    start_time=comp_data.get("start_time"),
-                    end_time=comp_data.get("end_time"),
                     table_ids=comp_data["table_ids"],
-                    call_ids=comp_data.get("call_ids"),
-                    service_mids=comp_data.get("service_mids"),
-                    join_steps=comp_data.get("join_steps"),
-                    nodes=comp_data["nodes"],
-                    links=comp_data["links"],
+                    nodes=[],
+                    links=[],
                 )
                 db.add(comp)
                 new_count += 1
@@ -126,15 +120,7 @@ async def fetch_all_table_compositions(db: AsyncSession) -> List[Dict[str, Any]]
     return [
         {
             "id": comp.id,
-            "owner": comp.owner,
-            "start_time": comp.start_time.isoformat() if comp.start_time else None,
-            "end_time": comp.end_time.isoformat() if comp.end_time else None,
             "table_ids": comp.table_ids,
-            "call_ids": comp.call_ids,
-            "service_mids": comp.service_mids,
-            "join_steps": comp.join_steps,
-            "nodes": comp.nodes,
-            "links": comp.links,
         }
         for comp in compositions
     ]

@@ -27,12 +27,7 @@ async def list_table_compositions(db: AsyncSession, limit: int = 100, offset: in
         "items": [
             {
                 "id": c.id,
-                "owner": c.owner,
-                "start_time": c.start_time.isoformat() if c.start_time else None,
-                "end_time": c.end_time.isoformat() if c.end_time else None,
                 "table_ids": c.table_ids,
-                "service_mids": c.service_mids,
-                "join_steps_count": len(c.join_steps or []),
             }
             for c in comps
         ],

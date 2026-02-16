@@ -115,35 +115,17 @@ class Composition(Base):
 
 class TableComposition(Base):
     """
-    TableComposition model - stores compositions focused on tables/datasets.
-
-    This is derived from call logs (Calls) and recovered compositions (DAG),
-    but stored separately to support table-centric analytics and recommendations,
-    e.g. "substitute a new table into an existing workflow".
+    TableComposition model - minimal table-only compositions.
+    Contains only composition id and ordered table sequence.
     """
     __tablename__ = "TableCompositions"
 
-    # Use a stable textual ID derived from the recovered composition
-    # (e.g. "3985_3986_4010" = call id chain)
     id = Column(Text, primary_key=True, unique=True)
-
-    owner = Column(String, index=True)  # user id (Calls.owner)
-    start_time = Column(DateTime, index=True)
-    end_time = Column(DateTime, index=True)
-
-    # Table/dataset IDs involved (normalized dataset ids as ints)
     table_ids = Column(JSON, nullable=False)
-
-    # Service-call chain (call ids and mids), for traceability
-    call_ids = Column(JSON)
-    service_mids = Column(JSON)
-
-    # Structured "join steps": service calls that consume BOTH a table and upstream service output
-    join_steps = Column(JSON)
-
-    # Full recovered nodes/links used to derive this record (for audit/debug)
-    nodes = Column(JSON, nullable=False)
-    links = Column(JSON, nullable=False)
+    # Backward-compatible placeholders required by existing DB schema.
+    # Logical payload is table_ids; these are stored as empty arrays.
+    nodes = Column(JSON, nullable=False, default=list)
+    links = Column(JSON, nullable=False, default=list)
 
     createdAt = Column(DateTime, default=datetime.utcnow)
     updatedAt = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
